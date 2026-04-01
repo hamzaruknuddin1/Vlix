@@ -1,0 +1,5 @@
+{
+  "name": "VideoSearch AI",
+  "description": "Upload videos and search through them using AI-powered transcription and visual tagging.",
+  "requestFramePermissions": []
+}

@@ -1,0 +1,45 @@
+{
+  "entities": {
+    "Video": {
+      "title": "Video",
+      "description": "Metadata and search index for a video",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "url": { "type": "string" },
+        "status": { "type": "string", "enum": ["processing", "ready", "error"] },
+        "transcript": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "timestamp": { "type": "number" },
+              "text": { "type": "string" }
+            }
+          }
+        },
+        "visualTags": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "timestamp": { "type": "number" },
+              "tag": { "type": "string" }
+            }
+          }
+        },
+        "errorDetails": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "userId": { "type": "string" }
+      },
+      "required": ["id", "title", "url", "status", "userId"]
+    }
+  },
+  "firestore": {
+    "/videos/{videoId}": {
+      "schema": "Video",
+      "description": "Collection of processed videos"
+    }
+  }
+}

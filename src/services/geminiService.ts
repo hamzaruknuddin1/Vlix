@@ -1,6 +1,6 @@
-export async function processVideo(videoBase64: string, mimeType: string) {
+export async function processVideo(frames: string[], mimeType: string) {
   try {
-    console.log(`[Client] Sending video to server for processing (${(videoBase64.length / 1024 / 1024).toFixed(2)} MB)...`);
+    console.log(`[Client] Sending ${frames.length} frames to server for processing...`);
     const startTime = Date.now();
     
     const response = await fetch("/api/process-video", {
@@ -8,7 +8,7 @@ export async function processVideo(videoBase64: string, mimeType: string) {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ videoBase64, mimeType }),
+      body: JSON.stringify({ frames, mimeType }),
     });
 
     if (!response.ok) {

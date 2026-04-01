@@ -86,6 +86,43 @@ export default function App() {
     }
   }, [videos, selectedVideo?.id]);
 
+  const extractFrames = async (file: File, frameCount: number = 5): Promise<string[]> => {
+    return new Promise((resolve, reject) => {
+      const video = document.createElement("video");
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      const frames: string[] = [];
+      
+      video.src = URL.createObjectURL(file);
+      video.muted = true;
+      video.playsInline = true;
+
+      video.onloadedmetadata = async () => {
+        const duration = video.duration;
+        const interval = duration / (frameCount + 1);
+        
+        for (let i = 1; i <= frameCount; i++) {
+          video.currentTime = i * interval;
+          await new Promise(r => {
+            const onSeeked = () => {
+              video.removeEventListener("seeked", onSeeked);
+              canvas.width = video.videoWidth;
+              canvas.height = video.videoHeight;
+              ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
+              frames.push(canvas.toDataURL("image/jpeg", 0.7).split(",")[1]);
+              r(null);
+            };
+            video.addEventListener("seeked", onSeeked);
+          });
+        }
+        URL.revokeObjectURL(video.src);
+        resolve(frames);
+      };
+
+      video.onerror = (e) => reject(e);
+    });
+  };
+
   const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
@@ -116,31 +153,29 @@ export default function App() {
       setVideos(prev => [newVideo, ...prev]);
       setSelectedVideo(newVideo);
 
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = async () => {
-        const base64 = (reader.result as string).split(",")[1];
-        try {
-          console.log("Starting AI processing for video:", videoId);
-          const result = await processVideo(base64, file.type);
-          console.log("AI processing complete for video:", videoId);
-          
-          setVideos(prev => prev.map(v => v.id === videoId ? {
-            ...v,
-            status: "ready",
-            transcript: result.transcript || [],
-            visualText: result.visualText || [],
-            visualObjects: result.visualObjects || []
-          } : v));
-        } catch (err: any) {
-          console.error("Processing error:", err);
-          setVideos(prev => prev.map(v => v.id === videoId ? {
-            ...v,
-            status: "error",
-            errorDetails: err.message || "AI processing failed"
-          } : v));
-        }
-      };
+      try {
+        console.log("Extracting frames for AI analysis...");
+        const frames = await extractFrames(file);
+        console.log("Frames extracted. Starting AI processing...");
+        
+        const result = await processVideo(frames, "image/jpeg");
+        console.log("AI processing complete for video:", videoId);
+        
+        setVideos(prev => prev.map(v => v.id === videoId ? {
+          ...v,
+          status: "ready",
+          transcript: result.transcript || [],
+          visualText: result.visualText || [],
+          visualObjects: result.visualObjects || []
+        } : v));
+      } catch (err: any) {
+        console.error("Processing error:", err);
+        setVideos(prev => prev.map(v => v.id === videoId ? {
+          ...v,
+          status: "error",
+          errorDetails: err.message || "AI processing failed"
+        } : v));
+      }
     } catch (err) {
       console.error("Upload error:", err);
       setError("Failed to process video locally.");

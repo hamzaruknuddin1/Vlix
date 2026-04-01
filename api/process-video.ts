@@ -11,27 +11,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: "OPENAI_API_KEY is not configured on Vercel" });
   }
 
-  const { videoBase64, mimeType } = req.body;
-  if (!videoBase64 || !mimeType) {
-    return res.status(400).json({ error: "Missing video data or mimeType" });
+  const { frames, mimeType } = req.body;
+  if (!frames || !Array.isArray(frames) || !mimeType) {
+    return res.status(400).json({ error: "Missing frames data or mimeType" });
   }
 
   const openai = new OpenAI({ apiKey: openaiKey });
 
   try {
-    console.log("[Vlix API] Processing with OpenAI GPT-4o...");
+    console.log(`[Vlix API] Processing ${frames.length} frames with OpenAI GPT-4o...`);
     
-    // Note: OpenAI doesn't support direct video files in Chat Completions.
-    // For a production app, we would extract frames. 
-    // For this implementation, we use GPT-4o's multimodal capabilities.
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
         {
           role: "system",
           content: `
-            You are a video analysis expert. Your task is to analyze the provided video content.
-            1. Generate a detailed transcript of SPOKEN words with precise timestamps.
+            You are a video analysis expert. You are provided with a sequence of frames from a video.
+            1. Generate a detailed transcript of SPOKEN words with precise timestamps (estimate based on frame sequence).
             2. Identify VISUAL TEXT (words written on screen, signs, overlays) with timestamps.
             3. Identify VISUAL OBJECTS, ENTITIES, and ACTIONS with timestamps.
             
@@ -46,13 +43,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         {
           role: "user",
           content: [
-            { type: "text", text: "Analyze this video and provide the transcript, visual text, and objects." },
-            {
-              type: "image_url",
+            { type: "text", text: "Analyze these video frames and provide the transcript, visual text, and objects." },
+            ...frames.map(frame => ({
+              type: "image_url" as const,
               image_url: {
-                url: `data:${mimeType};base64,${videoBase64}`
+                url: `data:${mimeType};base64,${frame}`
               }
-            }
+            }))
           ]
         }
       ],

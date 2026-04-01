@@ -38,13 +38,13 @@ async function startServer() {
       return res.status(500).json({ error: "OPENAI_API_KEY is not configured on server" });
     }
 
-    const { videoBase64, mimeType } = req.body;
-    if (!videoBase64 || !mimeType) {
-      return res.status(400).json({ error: "Missing video data or mimeType" });
+    const { frames, mimeType } = req.body;
+    if (!frames || !Array.isArray(frames) || !mimeType) {
+      return res.status(400).json({ error: "Missing frames data or mimeType" });
     }
 
     try {
-      console.log("[Vlix Server] Processing with OpenAI GPT-4o...");
+      console.log(`[Vlix Server] Processing ${frames.length} frames with OpenAI GPT-4o...`);
       
       const response = await openai.chat.completions.create({
         model: "gpt-4o",
@@ -52,8 +52,8 @@ async function startServer() {
           {
             role: "system",
             content: `
-              You are a video analysis expert. Your task is to analyze the provided video content.
-              1. Generate a detailed transcript of SPOKEN words with precise timestamps.
+              You are a video analysis expert. You are provided with a sequence of frames from a video.
+              1. Generate a detailed transcript of SPOKEN words with precise timestamps (estimate based on frame sequence).
               2. Identify VISUAL TEXT (words written on screen, signs, overlays) with timestamps.
               3. Identify VISUAL OBJECTS, ENTITIES, and ACTIONS with timestamps.
               
@@ -68,13 +68,13 @@ async function startServer() {
           {
             role: "user",
             content: [
-              { type: "text", text: "Analyze this video and provide the transcript, visual text, and objects." },
-              {
-                type: "image_url",
+              { type: "text", text: "Analyze these video frames and provide the transcript, visual text, and objects." },
+              ...frames.map((frame: string) => ({
+                type: "image_url" as const,
                 image_url: {
-                  url: `data:${mimeType};base64,${videoBase64}`
+                  url: `data:${mimeType};base64,${frame}`
                 }
-              }
+              }))
             ]
           }
         ],

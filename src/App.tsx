@@ -212,7 +212,7 @@ export default function App() {
             <div className="w-16 h-16 bg-orange-500 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-orange-500/20">
               <VideoIcon className="w-8 h-8 text-white" />
             </div>
-            <h1 className="text-4xl font-bold tracking-tight">VideoSearch AI</h1>
+            <h1 className="text-4xl font-bold tracking-tight">Vlix</h1>
             <p className="text-zinc-400">Search inside your videos like you search the web.</p>
           </div>
           <button 
@@ -236,7 +236,7 @@ export default function App() {
             <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
               <VideoIcon className="w-5 h-5 text-white" />
             </div>
-            <span className="font-bold text-xl tracking-tight">VideoSearch</span>
+            <span className="font-bold text-xl tracking-tight">Vlix</span>
           </div>
           
           <div className="flex items-center gap-4">

@@ -3,7 +3,7 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import multer from "multer";
 import { v4 as uuidv4 } from "uuid";
-import { GoogleGenAI, Type } from "@google/genai";
+import OpenAI from "openai";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -11,10 +11,6 @@ dotenv.config();
 async function startServer() {
   const app = express();
   const PORT = 3000;
-
-  // Configure Gemini
-  const geminiKey = process.env.GEMINI_API_KEY;
-  const ai = geminiKey ? new GoogleGenAI({ apiKey: geminiKey }) : null;
 
   // Configure OpenAI
   const openaiKey = process.env.OPENAI_API_KEY;
@@ -32,15 +28,14 @@ async function startServer() {
   app.get("/api/health", (req, res) => {
     res.json({ 
       status: "ok", 
-      geminiConfigured: !!ai,
       openaiConfigured: !!openai
     });
   });
 
   // AI Processing Endpoint
   app.post("/api/process-video", async (req, res) => {
-    if (!ai && !openai) {
-      return res.status(500).json({ error: "No AI API keys configured on server" });
+    if (!openai) {
+      return res.status(500).json({ error: "OPENAI_API_KEY is not configured on server" });
     }
 
     const { videoBase64, mimeType } = req.body;
@@ -48,119 +43,51 @@ async function startServer() {
       return res.status(400).json({ error: "Missing video data or mimeType" });
     }
 
-    const systemInstruction = `
-      You are a video analysis expert. Your task is to:
-      1. Generate a detailed transcript of SPOKEN words with precise timestamps.
-      2. Identify VISUAL TEXT (words written on screen, signs, overlays) with timestamps.
-      3. Identify VISUAL OBJECTS, ENTITIES, and ACTIONS (things that appear but aren't spoken or written) with timestamps.
+    try {
+      console.log("[Vlix Server] Processing with OpenAI GPT-4o...");
       
-      Output MUST be in JSON format matching the requested schema.
-      Be as concise as possible in descriptions to reduce latency.
-    `;
-
-    // Try Gemini first
-    if (ai) {
-      try {
-        console.log("[Server] Using Gemini for video processing...");
-        const model = "gemini-3-flash-preview";
-        const prompt = "Analyze this video for spoken transcript, visual text, and visual objects/actions.";
-        const videoPart = {
-          inlineData: {
-            data: videoBase64,
-            mimeType: mimeType,
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: `
+              You are a video analysis expert. Your task is to analyze the provided video content.
+              1. Generate a detailed transcript of SPOKEN words with precise timestamps.
+              2. Identify VISUAL TEXT (words written on screen, signs, overlays) with timestamps.
+              3. Identify VISUAL OBJECTS, ENTITIES, and ACTIONS with timestamps.
+              
+              Output MUST be in JSON format with this structure:
+              {
+                "transcript": [{"timestamp": 0, "text": "..."}],
+                "visualText": [{"timestamp": 0, "text": "..."}],
+                "visualObjects": [{"timestamp": 0, "name": "..."}]
+              }
+            `
           },
-        };
-
-        const result = await ai.models.generateContent({
-          model: model,
-          contents: { parts: [{ text: prompt }, videoPart] },
-          config: {
-            systemInstruction,
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                transcript: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      timestamp: { type: Type.NUMBER },
-                      text: { type: Type.STRING }
-                    },
-                    required: ["timestamp", "text"]
-                  }
-                },
-                visualText: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      timestamp: { type: Type.NUMBER },
-                      text: { type: Type.STRING }
-                    },
-                    required: ["timestamp", "text"]
-                  }
-                },
-                visualObjects: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      timestamp: { type: Type.NUMBER },
-                      name: { type: Type.STRING }
-                    },
-                    required: ["timestamp", "name"]
-                  }
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "Analyze this video and provide the transcript, visual text, and objects." },
+              {
+                type: "image_url",
+                image_url: {
+                  url: `data:${mimeType};base64,${videoBase64}`
                 }
-              },
-              required: ["transcript", "visualText", "visualObjects"]
-            }
+              }
+            ]
           }
-        });
+        ],
+        response_format: { type: "json_object" }
+      });
 
-        if (result.text) {
-          return res.json(JSON.parse(result.text));
-        }
-      } catch (error: any) {
-        console.error("Gemini Server Error, falling back to OpenAI if available:", error);
-        if (!openai) throw error;
-      }
-    }
+      const content = response.choices[0].message.content;
+      if (!content) throw new Error("Empty response from OpenAI");
 
-    // Fallback to OpenAI
-    if (openai) {
-      try {
-        console.log("[Server] Using OpenAI for video processing...");
-        const response = await openai.chat.completions.create({
-          model: "gpt-4o",
-          messages: [
-            { role: "system", content: systemInstruction },
-            {
-              role: "user",
-              content: [
-                { type: "text", text: "Analyze this video for spoken transcript, visual text, and visual objects/actions." },
-                {
-                  type: "input_audio",
-                  input_audio: {
-                    data: videoBase64,
-                    format: mimeType.includes("mp4") ? "mp4" : "wav"
-                  }
-                }
-              ]
-            }
-          ],
-          response_format: { type: "json_object" }
-        });
-
-        const content = response.choices[0].message.content;
-        if (content) {
-          return res.json(JSON.parse(content));
-        }
-      } catch (error: any) {
-        console.error("OpenAI Server Error:", error);
-        res.status(500).json({ error: error.message || "Failed to process video with OpenAI" });
-      }
+      res.json(JSON.parse(content));
+    } catch (error: any) {
+      console.error("OpenAI Server Error:", error);
+      res.status(500).json({ error: error.message || "Failed to process video with OpenAI" });
     }
   });
 

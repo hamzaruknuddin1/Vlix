@@ -1,5 +1,5 @@
 {
-  "name": "VideoSearch AI",
-  "description": "Upload videos and search through them using AI-powered transcription and visual tagging.",
+  "name": "Vlix",
+  "description": "AI-powered video search. Search inside your videos for spoken words, written text, and visual objects.",
   "requestFramePermissions": []
 }
